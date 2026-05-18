@@ -66,11 +66,11 @@ ANTHROPIC_API_KEY=<Anthropic API 키>
 Google Sheets (RAW 시트)
   → sheets_client.get_all_values()       # gspread로 읽기
   → report_parser.fetch_raw_data()       # 날짜 범위 필터 + 숫자 파싱
-  → report_parser.aggregate_by_keyword() # (keyword, media, ad_group) 키로 합산
-  → keyword_extractor.extract_conversion_keywords()  # 네거티브/중복/클릭0 필터
-  → [선택] recommender.recommend_keywords()  # Claude API 호출
-  → FastAPI 응답 → React 프론트엔드
+  → report_parser.aggregate_by_keyword() # (keyword, media, campaign, ad_group) 키로 합산
+  → FastAPI 응답 → React 프론트엔드 (필터링/집계는 프론트에서 처리)
 ```
+
+`extract_conversion_keywords()`는 키워드 추천(`/api/keywords/recommend`) 전처리에서만 사용됨. 전환 키워드 탭의 필터링은 백엔드에서 `conversions >= 1` 단순 조건으로 처리.
 
 ### 핵심 파일 역할
 
@@ -78,7 +78,7 @@ Google Sheets (RAW 시트)
 |---|---|
 | `sheets_client.py` | Google Sheets 연결. `get_client()`는 `lru_cache`로 연결 재사용 |
 | `report_parser.py` | RAW 시트 파싱. 헤더 행 동적 탐색 (`Year` 컬럼 위치 검색). 쉼표 포함 숫자(`1,234`) 처리 |
-| `keyword_extractor.py` | 전환 키워드 필터링. 네거티브는 부분 문자열 매칭, 등록 키워드는 정확 매칭 |
+| `keyword_extractor.py` | 전환 키워드 필터링 (추천용). 네거티브는 부분 문자열 매칭, 등록 키워드는 정확 매칭 |
 | `recommender.py` | Claude API 추천. 응답은 항상 JSON으로 받아 파싱. 할루시네이션 방지를 위해 JSON 스키마 엄격 준수 |
 | `csv_exporter.py` | 매체별 CSV 포맷 변환. `FORMAT_MAP` dict로 포맷 전략 선택 |
 | `config.py` | 브랜드 컨텍스트·네거티브·등록 키워드 파일 읽기/쓰기 |
@@ -86,20 +86,29 @@ Google Sheets (RAW 시트)
 ### Google Sheets 시트 구조
 
 **RAW 시트** (주 데이터):
-- 컬럼 순서: `Year, Month, weeknum, Date, 매체, 디바이스, 캠페인, 광고그룹, 키워드, cost, imp, clicks, 전환율, Install, 견적요청`
-- 전환 기준: `견적요청` 컬럼
+- 컬럼 인덱스: `0=Year, 1=Month, 2=weeknum, 3=Date, 4=매체, 5=디바이스, 6=캠페인, 7=광고그룹, 8=키워드, 9=cost, 10=imp, 11=clicks, 12=노출순위, 13=Install, 14=견적요청`
+- 컬럼 12는 `전환율`이 **아니라** `노출순위`(광고 노출 순위). 코드 내 변수명 `cvr`로 표기되어 있으나 실제로는 순위 값이며 집계 계산에 사용되지 않음.
+- 전환 기준: 인덱스 14 `견적요청` 컬럼
 - 비용 포맷: 쉼표 포함 문자열 (`202,027`) → `re.sub(r"[,\s]", "", val)` 로 파싱
 
 **MO_SELL_APP 검색어 RAW 시트**:
 - 컬럼 순서: `매체, 디바이스, 광고그룹, 키워드분류, 검색어, cost, imp, clicks, 전환율`
 - 전환 수 직접 없음 → `cvr * clicks / 100` 으로 추정
 
+### aggregate_by_keyword 집계 키
+
+```python
+key = (r.keyword, r.media, r.campaign, r.ad_group)
+```
+
+캠페인을 키에 포함해야 함. 같은 매체 내 MO_SELL_APP_KAKAO / MO_SELL_APP_NEW 캠페인이 동일한 광고그룹·키워드를 공유하므로, campaign을 빼면 두 캠페인 데이터가 잘못 합산된다.
+
 ### API 엔드포인트
 
 | 엔드포인트 | 역할 |
 |---|---|
-| `GET /api/performance` | 전체 키워드 성과 (상위 200개) |
-| `GET /api/keywords/conversion` | 전환 키워드만 필터링 |
+| `GET /api/performance` | 전체 키워드 성과 (전 기간 전체, 제한 없음) |
+| `GET /api/keywords/conversion` | 견적요청 ≥ 1인 키워드만 반환 |
 | `POST /api/keywords/recommend` | Claude API 키워드 추천 (20~40초 소요) |
 | `GET /api/report/insight` | AI 인사이트 리포트 (마크다운) |
 | `POST /api/download/csv?media=naver\|google\|meta` | 매체별 CSV 다운로드 |
@@ -107,6 +116,24 @@ Google Sheets (RAW 시트)
 | `GET/POST /api/config/*` | 브랜드/네거티브/등록 키워드 설정 |
 
 날짜 파라미터 미입력 시 최근 30일(오늘 기준 `today - 29`)이 기본값.
+
+---
+
+## 프론트엔드 필터 구조
+
+`App.tsx`에 매체 → 캠페인 → 광고그룹 3단계 계층 필터가 구현되어 있음.
+
+- **매체 필터**: `전체 / 네이버 / 구글 / 카카오` 버튼 (단일 선택)
+- **캠페인 필터**: 셀렉트박스, 매체 변경 시 초기화
+- **광고그룹 필터**: 버튼 다중 선택, 캠페인 변경 시 초기화
+
+필터 적용은 프론트에서만 (`applyFilters()` + `calcSummary()` 재계산). 백엔드 재호출 없음.
+
+KPI 카드는 6개 고정: `총 광고비 / 총 전환(견적요청) / 평균 CPA / 총 클릭 / 평균 CTR / 총 Install`
+
+키워드 성과 표 컬럼 순서: `키워드 / 매체 / 광고그룹 / 노출 / 클릭 / CPC / CTR / 광고비 / Install / 견적요청 / CPA`
+
+모든 숫자 컬럼 헤더 클릭 시 오름/내림 정렬 토글. 기본 정렬: 견적요청 내림차순.
 
 ---
 

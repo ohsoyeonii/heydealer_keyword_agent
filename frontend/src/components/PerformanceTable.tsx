@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { KeywordPerf } from "../lib/api";
 import { fmt } from "../lib/utils";
+import { exportPerformanceExcel } from "../lib/excel";
 
 type SortKey = keyof Pick<KeywordPerf, "impressions" | "clicks" | "cpc" | "ctr" | "cost" | "installs" | "conversions" | "cpa">;
 type SortDir = "asc" | "desc";
@@ -8,6 +9,7 @@ type SortDir = "asc" | "desc";
 interface Props {
   keywords: KeywordPerf[];
   title?: string;
+  period?: { start: string; end: string };
 }
 
 const COLUMNS: { label: string; key: SortKey | null; className?: string }[] = [
@@ -24,7 +26,7 @@ const COLUMNS: { label: string; key: SortKey | null; className?: string }[] = [
   { label: "CPA",      key: "cpa",         className: "num" },
 ];
 
-export function PerformanceTable({ keywords, title = "키워드별 성과" }: Props) {
+export function PerformanceTable({ keywords, title = "키워드별 성과", period }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("conversions");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -52,7 +54,15 @@ export function PerformanceTable({ keywords, title = "키워드별 성과" }: Pr
 
   return (
     <div className="table-wrap">
-      <h3>{title}</h3>
+      <div className="table-header-row">
+        <h3>{title}</h3>
+        <button
+          className="excel-btn"
+          onClick={() => exportPerformanceExcel(sorted, title, period)}
+        >
+          엑셀 다운로드
+        </button>
+      </div>
       <div className="table-scroll">
         <table>
           <thead>

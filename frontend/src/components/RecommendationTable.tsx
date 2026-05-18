@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { RecommendedKeyword, api } from "../lib/api";
+import { exportRecommendExcel } from "../lib/excel";
 
 interface Props {
   keywords: RecommendedKeyword[];
   insightSummary: string;
+  period?: { start: string; end: string };
 }
 
-export function RecommendationTable({ keywords, insightSummary }: Props) {
+export function RecommendationTable({ keywords, insightSummary, period }: Props) {
   const [filter, setFilter] = useState<"전체" | "유사" | "신규">("전체");
   const [downloading, setDownloading] = useState<string | null>(null);
 
@@ -58,6 +60,13 @@ export function RecommendationTable({ keywords, insightSummary }: Props) {
               {downloading === m ? "..." : m.charAt(0).toUpperCase() + m.slice(1)}
             </button>
           ))}
+          <span className="download-divider">|</span>
+          <button
+            className="excel-btn"
+            onClick={() => exportRecommendExcel(filtered, period)}
+          >
+            엑셀 다운로드
+          </button>
         </div>
       </div>
 

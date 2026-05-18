@@ -5,6 +5,7 @@ import { KpiCards } from "./components/KpiCards";
 import { PerformanceTable } from "./components/PerformanceTable";
 import { MediaChart } from "./components/MediaChart";
 import { RecommendationTable } from "./components/RecommendationTable";
+import { exportInsightExcel } from "./lib/excel";
 
 type Tab = "performance" | "conversion" | "recommend" | "insight";
 
@@ -272,6 +273,7 @@ export default function App() {
                 <PerformanceTable
                   keywords={filteredPerf.keywords}
                   title={filterLabel ? `키워드 성과 · ${filterLabel}` : "키워드 성과"}
+                  period={{ start, end }}
                 />
               </>
             )}
@@ -289,6 +291,7 @@ export default function App() {
                 <PerformanceTable
                   keywords={filteredConv.keywords}
                   title={filterLabel ? `전환 키워드 (견적요청 기준) · ${filterLabel}` : "전환 키워드 목록 (견적요청 기준)"}
+                  period={{ start, end }}
                 />
               </>
             )}
@@ -312,6 +315,7 @@ export default function App() {
                     <RecommendationTable
                       keywords={recData.recommendations}
                       insightSummary={recData.insight_summary}
+                      period={{ start, end }}
                     />
                   </>
                 )}
@@ -320,8 +324,16 @@ export default function App() {
 
             {tab === "insight" && insightData && (
               <div className="insight-report">
-                <div className="insight-meta">
-                  분석 기간: {insightData.period.start} ~ {insightData.period.end}
+                <div className="insight-report-header">
+                  <div className="insight-meta">
+                    분석 기간: {insightData.period.start} ~ {insightData.period.end}
+                  </div>
+                  <button
+                    className="excel-btn"
+                    onClick={() => exportInsightExcel(insightData)}
+                  >
+                    엑셀 다운로드
+                  </button>
                 </div>
                 <KpiCards summary={insightData.summary} />
                 <div
