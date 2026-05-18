@@ -1,0 +1,21 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+backend/config_data/
+
+# 서비스 계정 키 (절대 커밋 금지)
+*.json
+!frontend/package.json
+!frontend/tsconfig.json
+
+# 환경변수
+backend/.env
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# 임시 스크립트
+backend/check_campaign.py
+backend/inspect_sheet.py
