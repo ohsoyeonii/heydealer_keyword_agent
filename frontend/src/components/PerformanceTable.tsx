@@ -91,7 +91,7 @@ export function PerformanceTable({ keywords, title = "키워드별 성과", peri
                 <td className="num">{fmt.krw(k.cost)}</td>
                 <td className="num">{fmt.num(k.installs)}</td>
                 <td className="num conv-num">{fmt.num(k.conversions)}</td>
-                <td className={`num ${k.cpa > 0 ? "cpa-num" : ""}`}>{k.cpa > 0 ? fmt.krw(k.cpa) : "—"}</td>
+                <td className={`num ${k.cpa > 110000 ? "cpa-over" : k.cpa > 0 ? "cpa-num" : ""}`}>{k.cpa > 0 ? fmt.krw(k.cpa) : "—"}</td>
               </tr>
             ))}
           </tbody>
